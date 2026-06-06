@@ -1,4 +1,4 @@
-name: Build LineageOS for lancelot
+name: Build boot.img for lancelot
 
 on:
   workflow_dispatch:
@@ -169,11 +169,12 @@ jobs:
           ./device/xiaomi/mt6768-common/extract-files.sh "$DUMP_DIR"
           ./device/xiaomi/lancelot/extract-files.sh "$DUMP_DIR"
 
-      - name: Build ROM
+      - name: Build boot image
         run: |
           cd "$BUILD_DIR"
           source build/envsetup.sh
-          brunch lancelot
+          lunch lineage_lancelot-userdebug
+          m bootimage
 
       - name: Collect artifacts
         run: |
@@ -181,16 +182,12 @@ jobs:
           ARTIFACT_DIR="$RUNNER_TEMP/artifacts"
           mkdir -p "$ARTIFACT_DIR"
           cp "$OUT_DIR"/boot.img "$ARTIFACT_DIR"/
-          cp "$OUT_DIR"/recovery.img "$ARTIFACT_DIR"/
-          cp "$OUT_DIR"/dtbo.img "$ARTIFACT_DIR"/
-          cp "$OUT_DIR"/vbmeta.img "$ARTIFACT_DIR"/
-          cp "$OUT_DIR"/lineage-*.zip "$ARTIFACT_DIR"/
           (cd "$ARTIFACT_DIR" && sha256sum * > SHA256SUMS.txt)
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: lineage-lancelot-${{ github.run_number }}
+          name: boot-lancelot-${{ github.run_number }}
           path: ${{ runner.temp }}/artifacts
           if-no-files-found: error
 

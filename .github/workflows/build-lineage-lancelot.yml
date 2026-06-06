@@ -33,7 +33,6 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label }}
     timeout-minutes: 1440
     env:
-      BUILD_DIR: ${{ runner.temp }}/android
       MANIFEST_BRANCH: ${{ github.event.inputs.manifest_branch }}
       DEVICE_BRANCH: ${{ github.event.inputs.device_branch }}
       STOCK_ROM_URL: ${{ github.event.inputs.stock_rom_url }}
@@ -55,6 +54,7 @@ jobs:
 
       - name: Install build dependencies
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           sudo apt-get update
           sudo apt-get install -y \
             adb \
@@ -97,6 +97,7 @@ jobs:
 
       - name: Install repo tool
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           mkdir -p "$HOME/bin"
           curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
           chmod +x "$HOME/bin/repo"
@@ -104,6 +105,7 @@ jobs:
 
       - name: Initialize source tree
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           mkdir -p "$BUILD_DIR"
           cd "$BUILD_DIR"
           repo init -u https://github.com/LineageOS/android.git -b "$MANIFEST_BRANCH" --git-lfs
@@ -113,6 +115,7 @@ jobs:
 
       - name: Sync sources
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           cd "$BUILD_DIR"
           repo sync -c --force-sync --no-clone-bundle --no-tags -j"$(nproc --all)"
 
@@ -132,6 +135,7 @@ jobs:
 
       - name: Build lpunpack host tool
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           cd "$BUILD_DIR"
           source build/envsetup.sh
           m lpunpack
@@ -167,6 +171,7 @@ jobs:
       - name: Extract proprietary blobs
         run: |
           set -euxo pipefail
+          export BUILD_DIR="$RUNNER_TEMP/android"
           cd "$BUILD_DIR"
           source build/envsetup.sh
           export LC_ALL=C
@@ -176,6 +181,7 @@ jobs:
 
       - name: Build boot image
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           cd "$BUILD_DIR"
           source build/envsetup.sh
           lunch lineage_lancelot-userdebug
@@ -183,6 +189,7 @@ jobs:
 
       - name: Collect artifacts
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           OUT_DIR="$BUILD_DIR/out/target/product/lancelot"
           ARTIFACT_DIR="$RUNNER_TEMP/artifacts"
           mkdir -p "$ARTIFACT_DIR"
@@ -199,6 +206,7 @@ jobs:
       - name: Unmount extracted partitions
         if: always()
         run: |
+          export BUILD_DIR="$RUNNER_TEMP/android"
           sudo umount "$RUNNER_TEMP/system_dump/system/odm" || true
           sudo umount "$RUNNER_TEMP/system_dump/system/system_ext" || true
           sudo umount "$RUNNER_TEMP/system_dump/system/product" || true

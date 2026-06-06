@@ -47,13 +47,14 @@ jobs:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 10240
+          root-reserve-mb: 2048
           temp-reserve-mb: 2048
           swap-size-mb: 8192
           remove-dotnet: "true"
           remove-android: "true"
           remove-haskell: "true"
           remove-codeql: "true"
+          remove-docker-images: "true"
         continue-on-error: true
 
       - name: Install build dependencies
@@ -112,7 +113,7 @@ jobs:
           export BUILD_DIR="$RUNNER_TEMP/android"
           mkdir -p "$BUILD_DIR"
           cd "$BUILD_DIR"
-          repo init -u https://github.com/LineageOS/android.git -b "$MANIFEST_BRANCH" --git-lfs
+          repo init -u https://github.com/LineageOS/android.git -b "$MANIFEST_BRANCH" --git-lfs --depth=1 --partial-clone --clone-filter=blob:none
           mkdir -p .repo/local_manifests
           cp "$RUNNER_TEMP/lancelot-lineage-20.xml" .repo/local_manifests/lancelot.xml
           sed -i "s/__DEVICE_BRANCH__/$DEVICE_BRANCH/g" .repo/local_manifests/lancelot.xml
@@ -121,7 +122,7 @@ jobs:
         run: |
           export BUILD_DIR="$RUNNER_TEMP/android"
           cd "$BUILD_DIR"
-          repo sync -c --force-sync --no-clone-bundle --no-tags -j"$(nproc --all)"
+          repo sync -c --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune -j2
 
       - name: Download stock ROM
         run: |

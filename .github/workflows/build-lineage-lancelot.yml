@@ -47,7 +47,7 @@ jobs:
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
         with:
-          root-reserve-mb: 2048
+          root-reserve-mb: 8192
           temp-reserve-mb: 2048
           swap-size-mb: 8192
           remove-dotnet: "true"
@@ -57,47 +57,14 @@ jobs:
           remove-docker-images: "true"
         continue-on-error: true
 
-      - name: Install build dependencies
+      - name: Install bootstrap dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            adb \
-            bc \
-            bison \
-            build-essential \
-            ccache \
             curl \
-            device-tree-compiler \
-            flex \
-            g++-multilib \
-            gcc-multilib \
             git-lfs \
-            gnupg \
-            gperf \
-            imagemagick \
-            lib32ncurses5-dev \
-            lib32readline-dev \
-            lib32z1-dev \
-            libelf-dev \
-            libgl1-mesa-dev \
-            liblz4-tool \
-            libncurses5-dev \
-            libsdl1.2-dev \
-            libssl-dev \
-            libxml2 \
-            libxml2-utils \
-            lld \
-            lz4 \
-            openjdk-11-jdk \
-            pngcrush \
-            python-is-python3 \
-            rsync \
-            schedtool \
-            squashfs-tools \
-            unzip \
-            xz-utils \
-            zip \
-            zlib1g-dev
+            python-is-python3
+          sudo apt-get clean
 
       - name: Install repo tool
         run: |
@@ -118,14 +85,62 @@ jobs:
           cp "$RUNNER_TEMP/lancelot-lineage-20.xml" .repo/local_manifests/lancelot.xml
           sed -i "s/__DEVICE_BRANCH__/$DEVICE_BRANCH/g" .repo/local_manifests/lancelot.xml
 
+      - name: Show filesystem usage before sync
+        run: |
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" /
+
       - name: Sync sources
         run: |
           export WORK_ROOT="$GITHUB_WORKSPACE/work"
           export BUILD_DIR="$WORK_ROOT/android"
-          echo "Filesystem usage before repo sync:"
-          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" /
+          export TMPDIR="$WORK_ROOT/tmp"
+          mkdir -p "$TMPDIR"
           cd "$BUILD_DIR"
-          repo sync -c --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune -j2
+          repo sync -c --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune -j1
+
+      - name: Show filesystem usage after sync
+        run: |
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" /
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            adb \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            device-tree-compiler \
+            flex \
+            g++-multilib \
+            gcc-multilib \
+            gnupg \
+            gperf \
+            imagemagick \
+            lib32ncurses5-dev \
+            lib32readline-dev \
+            lib32z1-dev \
+            libelf-dev \
+            libgl1-mesa-dev \
+            liblz4-tool \
+            libncurses5-dev \
+            libsdl1.2-dev \
+            libssl-dev \
+            libxml2 \
+            libxml2-utils \
+            lld \
+            lz4 \
+            openjdk-11-jdk \
+            pngcrush \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            unzip \
+            xz-utils \
+            zip \
+            zlib1g-dev
+          sudo apt-get clean
 
       - name: Download stock ROM
         run: |

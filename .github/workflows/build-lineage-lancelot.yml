@@ -59,7 +59,6 @@ jobs:
 
       - name: Install build dependencies
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
           sudo apt-get update
           sudo apt-get install -y \
             adb \
@@ -102,7 +101,6 @@ jobs:
 
       - name: Install repo tool
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
           mkdir -p "$HOME/bin"
           curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
           chmod +x "$HOME/bin/repo"
@@ -110,7 +108,9 @@ jobs:
 
       - name: Initialize source tree
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
+          mkdir -p "$WORK_ROOT"
           mkdir -p "$BUILD_DIR"
           cd "$BUILD_DIR"
           repo init -u https://github.com/LineageOS/android.git -b "$MANIFEST_BRANCH" --git-lfs --depth=1 --partial-clone --clone-filter=blob:none
@@ -120,14 +120,19 @@ jobs:
 
       - name: Sync sources
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
+          echo "Filesystem usage before repo sync:"
+          df -h "$GITHUB_WORKSPACE" "$RUNNER_TEMP" /
           cd "$BUILD_DIR"
           repo sync -c --force-sync --no-clone-bundle --no-tags --optimized-fetch --prune -j2
 
       - name: Download stock ROM
         run: |
-          mkdir -p "$RUNNER_TEMP/stock"
-          cd "$RUNNER_TEMP/stock"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export STOCK_DIR="$WORK_ROOT/stock"
+          mkdir -p "$STOCK_DIR"
+          cd "$STOCK_DIR"
           curl -fL "$STOCK_ROM_URL" -o stock.rom
           if file stock.rom | grep -qi 'gzip'; then
             mv stock.rom stock.tgz
@@ -136,11 +141,12 @@ jobs:
             mv stock.rom stock.zip
             unzip -q stock.zip
           fi
-          find "$RUNNER_TEMP/stock" -maxdepth 3 -type f | sort
+          find "$STOCK_DIR" -maxdepth 3 -type f | sort
 
       - name: Build lpunpack host tool
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
           cd "$BUILD_DIR"
           source build/envsetup.sh
           m lpunpack
@@ -148,13 +154,16 @@ jobs:
       - name: Unpack stock images for blob extraction
         run: |
           set -euxo pipefail
-          SUPER_IMG="$(find "$RUNNER_TEMP/stock" -type f -name super.img | head -n 1)"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
+          export STOCK_DIR="$WORK_ROOT/stock"
+          export DUMP_DIR="$WORK_ROOT/system_dump"
+          export PARTS_DIR="$WORK_ROOT/partitions"
+          SUPER_IMG="$(find "$STOCK_DIR" -type f -name super.img | head -n 1)"
           if [ -z "$SUPER_IMG" ]; then
             echo "super.img not found in stock ROM archive"
             exit 1
           fi
-          DUMP_DIR="$RUNNER_TEMP/system_dump"
-          PARTS_DIR="$RUNNER_TEMP/partitions"
           mkdir -p "$DUMP_DIR/system" "$PARTS_DIR"
           "$BUILD_DIR/out/host/linux-x86/bin/lpunpack" "$SUPER_IMG" "$PARTS_DIR"
           mount_if_present() {
@@ -176,17 +185,19 @@ jobs:
       - name: Extract proprietary blobs
         run: |
           set -euxo pipefail
-          export BUILD_DIR="$RUNNER_TEMP/android"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
+          export DUMP_DIR="$WORK_ROOT/system_dump"
           cd "$BUILD_DIR"
           source build/envsetup.sh
           export LC_ALL=C
-          DUMP_DIR="$RUNNER_TEMP/system_dump"
           ./device/xiaomi/mt6768-common/extract-files.sh "$DUMP_DIR"
           ./device/xiaomi/lancelot/extract-files.sh "$DUMP_DIR"
 
       - name: Build boot image
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
           cd "$BUILD_DIR"
           source build/envsetup.sh
           lunch lineage_lancelot-userdebug
@@ -194,9 +205,10 @@ jobs:
 
       - name: Collect artifacts
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          export BUILD_DIR="$WORK_ROOT/android"
           OUT_DIR="$BUILD_DIR/out/target/product/lancelot"
-          ARTIFACT_DIR="$RUNNER_TEMP/artifacts"
+          ARTIFACT_DIR="$WORK_ROOT/artifacts"
           mkdir -p "$ARTIFACT_DIR"
           cp "$OUT_DIR"/boot.img "$ARTIFACT_DIR"/
           (cd "$ARTIFACT_DIR" && sha256sum * > SHA256SUMS.txt)
@@ -205,15 +217,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: boot-lancelot-${{ github.run_number }}
-          path: ${{ runner.temp }}/artifacts
+          path: ${{ github.workspace }}/work/artifacts
           if-no-files-found: error
 
       - name: Unmount extracted partitions
         if: always()
         run: |
-          export BUILD_DIR="$RUNNER_TEMP/android"
-          sudo umount "$RUNNER_TEMP/system_dump/system/odm" || true
-          sudo umount "$RUNNER_TEMP/system_dump/system/system_ext" || true
-          sudo umount "$RUNNER_TEMP/system_dump/system/product" || true
-          sudo umount "$RUNNER_TEMP/system_dump/system/vendor" || true
-          sudo umount "$RUNNER_TEMP/system_dump/system" || true
+          export WORK_ROOT="$GITHUB_WORKSPACE/work"
+          sudo umount "$WORK_ROOT/system_dump/system/odm" || true
+          sudo umount "$WORK_ROOT/system_dump/system/system_ext" || true
+          sudo umount "$WORK_ROOT/system_dump/system/product" || true
+          sudo umount "$WORK_ROOT/system_dump/system/vendor" || true
+          sudo umount "$WORK_ROOT/system_dump/system" || true

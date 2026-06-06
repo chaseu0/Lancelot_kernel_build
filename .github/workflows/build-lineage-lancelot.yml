@@ -1,0 +1,204 @@
+name: Build LineageOS for lancelot
+
+on:
+  workflow_dispatch:
+    inputs:
+      lineage_branch:
+        description: "LineageOS branch"
+        required: true
+        default: "lineage-20"
+      stock_rom_url:
+        description: "Direct stock ROM archive URL used for blob extraction"
+        required: true
+        type: string
+      runner_label:
+        description: "Runner label. Hosted runners are space-constrained."
+        required: true
+        default: "ubuntu-22.04"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lineage-lancelot-${{ github.ref }}-${{ github.event.inputs.lineage_branch }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ${{ github.event.inputs.runner_label }}
+    timeout-minutes: 1440
+    env:
+      BUILD_DIR: ${{ github.workspace }}/android
+      LINEAGE_BRANCH: ${{ github.event.inputs.lineage_branch }}
+      STOCK_ROM_URL: ${{ github.event.inputs.stock_rom_url }}
+    steps:
+      - name: Checkout builder repo
+        uses: actions/checkout@v4
+
+      - name: Maximize build space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 10240
+          temp-reserve-mb: 2048
+          swap-size-mb: 8192
+          remove-dotnet: "true"
+          remove-android: "true"
+          remove-haskell: "true"
+          remove-codeql: "true"
+        continue-on-error: true
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            adb \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            curl \
+            device-tree-compiler \
+            flex \
+            g++-multilib \
+            gcc-multilib \
+            git-lfs \
+            gnupg \
+            gperf \
+            imagemagick \
+            lib32ncurses5-dev \
+            lib32readline-dev \
+            lib32z1-dev \
+            libelf-dev \
+            libgl1-mesa-dev \
+            liblz4-tool \
+            libncurses5-dev \
+            libsdl1.2-dev \
+            libssl-dev \
+            libxml2 \
+            libxml2-utils \
+            lld \
+            lz4 \
+            openjdk-11-jdk \
+            pngcrush \
+            python-is-python3 \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            unzip \
+            xz-utils \
+            zip \
+            zlib1g-dev
+
+      - name: Install repo tool
+        run: |
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Initialize source tree
+        run: |
+          mkdir -p "$BUILD_DIR"
+          cd "$BUILD_DIR"
+          repo init -u https://github.com/LineageOS/android.git -b "$LINEAGE_BRANCH" --git-lfs
+          mkdir -p .repo/local_manifests
+          cp "$GITHUB_WORKSPACE/manifests/lancelot-lineage-20.xml" .repo/local_manifests/lancelot.xml
+          sed -i "s/__LINEAGE_BRANCH__/$LINEAGE_BRANCH/g" .repo/local_manifests/lancelot.xml
+
+      - name: Sync sources
+        run: |
+          cd "$BUILD_DIR"
+          repo sync -c --force-sync --no-clone-bundle --no-tags -j"$(nproc --all)"
+
+      - name: Download stock ROM
+        run: |
+          mkdir -p "$RUNNER_TEMP/stock"
+          cd "$RUNNER_TEMP/stock"
+          curl -fL "$STOCK_ROM_URL" -o stock.rom
+          if file stock.rom | grep -qi 'gzip'; then
+            mv stock.rom stock.tgz
+            tar -xzf stock.tgz
+          else
+            mv stock.rom stock.zip
+            unzip -q stock.zip
+          fi
+          find "$RUNNER_TEMP/stock" -maxdepth 3 -type f | sort
+
+      - name: Build lpunpack host tool
+        run: |
+          cd "$BUILD_DIR"
+          source build/envsetup.sh
+          m lpunpack
+
+      - name: Unpack stock images for blob extraction
+        run: |
+          set -euxo pipefail
+          SUPER_IMG="$(find "$RUNNER_TEMP/stock" -type f -name super.img | head -n 1)"
+          if [ -z "$SUPER_IMG" ]; then
+            echo "super.img not found in stock ROM archive"
+            exit 1
+          fi
+          DUMP_DIR="$RUNNER_TEMP/system_dump"
+          PARTS_DIR="$RUNNER_TEMP/partitions"
+          mkdir -p "$DUMP_DIR/system" "$PARTS_DIR"
+          "$BUILD_DIR/out/host/linux-x86/bin/lpunpack" "$SUPER_IMG" "$PARTS_DIR"
+          mount_if_present() {
+            local image_name="$1"
+            local mount_point="$2"
+            local image_path="$PARTS_DIR/$image_name"
+            if [ -f "$image_path" ]; then
+              sudo mkdir -p "$mount_point"
+              sudo mount -o loop,ro "$image_path" "$mount_point"
+            fi
+          }
+          mount_if_present system.img "$DUMP_DIR/system"
+          mount_if_present vendor.img "$DUMP_DIR/system/vendor"
+          mount_if_present product.img "$DUMP_DIR/system/product"
+          mount_if_present system_ext.img "$DUMP_DIR/system/system_ext"
+          mount_if_present odm.img "$DUMP_DIR/system/odm"
+          find "$DUMP_DIR" -maxdepth 2 -type d | sort
+
+      - name: Extract proprietary blobs
+        run: |
+          set -euxo pipefail
+          cd "$BUILD_DIR"
+          source build/envsetup.sh
+          export LC_ALL=C
+          DUMP_DIR="$RUNNER_TEMP/system_dump"
+          ./device/xiaomi/mt6768-common/extract-files.sh "$DUMP_DIR"
+          ./device/xiaomi/lancelot/extract-files.sh "$DUMP_DIR"
+
+      - name: Build ROM
+        run: |
+          cd "$BUILD_DIR"
+          source build/envsetup.sh
+          brunch lancelot
+
+      - name: Collect artifacts
+        run: |
+          OUT_DIR="$BUILD_DIR/out/target/product/lancelot"
+          ARTIFACT_DIR="$RUNNER_TEMP/artifacts"
+          mkdir -p "$ARTIFACT_DIR"
+          cp "$OUT_DIR"/boot.img "$ARTIFACT_DIR"/
+          cp "$OUT_DIR"/recovery.img "$ARTIFACT_DIR"/
+          cp "$OUT_DIR"/dtbo.img "$ARTIFACT_DIR"/
+          cp "$OUT_DIR"/vbmeta.img "$ARTIFACT_DIR"/
+          cp "$OUT_DIR"/lineage-*.zip "$ARTIFACT_DIR"/
+          (cd "$ARTIFACT_DIR" && sha256sum * > SHA256SUMS.txt)
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: lineage-lancelot-${{ github.run_number }}
+          path: ${{ runner.temp }}/artifacts
+          if-no-files-found: error
+
+      - name: Unmount extracted partitions
+        if: always()
+        run: |
+          sudo umount "$RUNNER_TEMP/system_dump/system/odm" || true
+          sudo umount "$RUNNER_TEMP/system_dump/system/system_ext" || true
+          sudo umount "$RUNNER_TEMP/system_dump/system/product" || true
+          sudo umount "$RUNNER_TEMP/system_dump/system/vendor" || true
+          sudo umount "$RUNNER_TEMP/system_dump/system" || true

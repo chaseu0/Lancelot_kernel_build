@@ -33,7 +33,7 @@ jobs:
     runs-on: ${{ github.event.inputs.runner_label }}
     timeout-minutes: 1440
     env:
-      BUILD_DIR: ${{ github.workspace }}/android
+      BUILD_DIR: /mnt/build/android
       MANIFEST_BRANCH: ${{ github.event.inputs.manifest_branch }}
       DEVICE_BRANCH: ${{ github.event.inputs.device_branch }}
       STOCK_ROM_URL: ${{ github.event.inputs.stock_rom_url }}
@@ -43,6 +43,8 @@ jobs:
 
       - name: Maximize build space
         uses: easimon/maximize-build-space@master
+        env:
+          BUILD_MOUNT_PATH: /mnt/build
         with:
           root-reserve-mb: 10240
           temp-reserve-mb: 2048

@@ -39,7 +39,8 @@ For a real full-ROM build, prefer one of these:
 2. Open `Actions`.
 3. Run `Build boot.img for lancelot`.
 4. Provide a stock ROM archive URL that matches the Android 11 firmware baseline expected by `lancelot`.
-5. If the hosted runner runs out of space, switch the workflow to a self-hosted runner before trying again.
+5. Leave `manifest_branch` at `lineage-20.0` and `device_branch` at `lineage-20` unless you are deliberately retargeting the source trees.
+6. If the hosted runner runs out of space, switch the workflow to a self-hosted runner before trying again.
 
 ## Outputs
 

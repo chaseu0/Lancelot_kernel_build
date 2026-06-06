@@ -4,25 +4,25 @@
     name="LineageOS/android_device_xiaomi_lancelot"
     path="device/xiaomi/lancelot"
     remote="github"
-    revision="__LINEAGE_BRANCH__" />
+    revision="__DEVICE_BRANCH__" />
   <project
     name="LineageOS/android_device_xiaomi_mt6768-common"
     path="device/xiaomi/mt6768-common"
     remote="github"
-    revision="__LINEAGE_BRANCH__" />
+    revision="__DEVICE_BRANCH__" />
   <project
     name="LineageOS/android_kernel_xiaomi_mt6768"
     path="kernel/xiaomi/mt6768"
     remote="github"
-    revision="__LINEAGE_BRANCH__" />
+    revision="__DEVICE_BRANCH__" />
   <project
     name="LineageOS/android_device_mediatek_sepolicy_vndr"
     path="device/mediatek/sepolicy_vndr"
     remote="github"
-    revision="__LINEAGE_BRANCH__" />
+    revision="__DEVICE_BRANCH__" />
   <project
     name="LineageOS/android_hardware_mediatek"
     path="hardware/mediatek"
     remote="github"
-    revision="__LINEAGE_BRANCH__" />
+    revision="__DEVICE_BRANCH__" />
 </manifest>

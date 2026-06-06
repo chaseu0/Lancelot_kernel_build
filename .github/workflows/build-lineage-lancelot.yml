@@ -3,8 +3,12 @@ name: Build boot.img for lancelot
 on:
   workflow_dispatch:
     inputs:
-      lineage_branch:
-        description: "LineageOS branch"
+      manifest_branch:
+        description: "LineageOS/android manifest branch"
+        required: true
+        default: "lineage-20.0"
+      device_branch:
+        description: "Device and kernel branch"
         required: true
         default: "lineage-20"
       stock_rom_url:
@@ -21,7 +25,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: lineage-lancelot-${{ github.ref }}-${{ github.event.inputs.lineage_branch }}
+  group: lineage-lancelot-${{ github.ref }}-${{ github.event.inputs.manifest_branch }}-${{ github.event.inputs.device_branch }}
   cancel-in-progress: false
 
 jobs:
@@ -30,7 +34,8 @@ jobs:
     timeout-minutes: 1440
     env:
       BUILD_DIR: ${{ github.workspace }}/android
-      LINEAGE_BRANCH: ${{ github.event.inputs.lineage_branch }}
+      MANIFEST_BRANCH: ${{ github.event.inputs.manifest_branch }}
+      DEVICE_BRANCH: ${{ github.event.inputs.device_branch }}
       STOCK_ROM_URL: ${{ github.event.inputs.stock_rom_url }}
     steps:
       - name: Checkout builder repo
@@ -101,10 +106,10 @@ jobs:
         run: |
           mkdir -p "$BUILD_DIR"
           cd "$BUILD_DIR"
-          repo init -u https://github.com/LineageOS/android.git -b "$LINEAGE_BRANCH" --git-lfs
+          repo init -u https://github.com/LineageOS/android.git -b "$MANIFEST_BRANCH" --git-lfs
           mkdir -p .repo/local_manifests
           cp "$GITHUB_WORKSPACE/manifests/lancelot-lineage-20.xml" .repo/local_manifests/lancelot.xml
-          sed -i "s/__LINEAGE_BRANCH__/$LINEAGE_BRANCH/g" .repo/local_manifests/lancelot.xml
+          sed -i "s/__DEVICE_BRANCH__/$DEVICE_BRANCH/g" .repo/local_manifests/lancelot.xml
 
       - name: Sync sources
         run: |
